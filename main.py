@@ -4,13 +4,12 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin
+from urllib.parse import ParseResult, urljoin, urlparse
+import os
 
 
 class Scraper:
     def __init__(self):
-        self.current_url = None
-
         # Set up Chrome options
         self.chrome_options = webdriver.ChromeOptions()
         self.chrome_options.binary_location = "/run/current-system/sw/bin/chromium"
@@ -29,6 +28,82 @@ class Scraper:
         service = Service(executable_path="/run/current-system/sw/bin/chromedriver")
         self.driver = webdriver.Chrome(service=service, options=self.chrome_options)
         self.wait = WebDriverWait(self.driver, 20)
+
+        self.current_url = None
+
+        self.file_extensions = {
+            # Documents
+            ".pdf",
+            ".doc",
+            ".docx",
+            ".xls",
+            ".xlsx",
+            ".ppt",
+            ".pptx",
+            ".txt",
+            ".csv",
+            ".rtf",
+            ".odt",
+            ".ods",
+            ".odp",
+            # Images
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".gif",
+            ".bmp",
+            ".svg",
+            ".webp",
+            ".ico",
+            # Archives
+            ".zip",
+            ".rar",
+            ".tar",
+            ".gz",
+            ".7z",
+            ".bz2",
+            # Media
+            ".mp4",
+            ".avi",
+            ".mov",
+            ".wmv",
+            ".flv",
+            ".mp3",
+            ".wav",
+            ".ogg",
+            # Code/Data
+            ".json",
+            ".xml",
+            ".yaml",
+            ".yml",
+            ".sql",
+            # Other
+            ".exe",
+            ".dmg",
+            ".apk",
+            ".jar",
+        }
+
+        self.non_discoverable_patterns = [
+            "javascript:",
+            "mailto:",
+            "tel:",
+            "ftp:",
+            "file:",
+            "#",  # Fragment-only links
+        ]
+
+        self.skip_paths = [
+            "/logout",
+            "/signout",
+            "/sign-out",
+            "/login",
+            "/signin",
+            "/sign-in",
+            "/register",
+            "/signup",
+            "/sign-up",
+        ]
 
     def open_page(self, url):
         self.current_url = url
@@ -60,6 +135,42 @@ class Scraper:
 
         return self.remove_duplicates(absolute_hrefs)
 
+    def isFile(self, url):
+        parsed = urlparse(url)
+
+        path = parsed.path
+
+        _, ext = os.path.splitext(path)
+
+        return ext.lower() in self.file_extensions
+
+    def get_file_links(self, links):
+        return [url for url in links if self.isFile(url)]
+
+    def isDiscoverable(self, url):
+        parsed = urlparse(url)
+
+        if self.isFile(url):
+            return False
+
+        url_lower = url.lower()
+        for pattern in self.non_discoverable_patterns:
+            if url_lower.startswith(pattern):
+                return False
+
+        path_lower = parsed.path.lower()
+        for skip in self.skip_paths:
+            if skip in path_lower:
+                return False
+
+        if parsed.scheme and parsed.scheme not in ["http", "https"]:
+            return False
+
+        return True
+
+    def get_discoverable_links(self, links):
+        return [url for url in links if self.isDiscoverable(url)]
+
 
 if __name__ == "__main__":
     scraper = Scraper()
@@ -68,7 +179,8 @@ if __name__ == "__main__":
         print("Page loaded...")
 
         hrefs = scraper.get_all_href_tags()
-        print(hrefs)
+        # print(hrefs)
+        print(scraper.get_file_links(hrefs))
 
         print("Logic finished...")
     finally:
