@@ -120,6 +120,12 @@ class Scraper:
         return set(array)
 
     def get_all_href_tags(self):
+        try:
+            self.wait.until(EC.presence_of_element_located((By.TAG_NAME, "a")))
+        except Exception:
+            print("  Warning: No anchor tags found on page")
+            return set()
+
         soup = BeautifulSoup(self.driver.page_source, "html.parser")
 
         anchor_tags = soup.find_all("a", href=True)
@@ -171,26 +177,48 @@ class Scraper:
     def get_discoverable_links(self, links):
         return [url for url in links if self.isDiscoverable(url)]
 
+    def run(self, url, depth=0):
+        all_urls = set()
+        to_discover_urls = set([url])
+        has_discovered_urls = set()
+        current_depth = 0
+
+        while to_discover_urls and current_depth <= depth:
+            urls_at_current_level = list(to_discover_urls)
+            to_discover_urls.clear()
+
+            for current_url_to_discover in urls_at_current_level:
+                if current_url_to_discover in has_discovered_urls:
+                    continue
+
+                print(f"Discovering (depth {current_depth}): {current_url_to_discover}")
+
+                try:
+                    self.open_page(current_url_to_discover)
+                    has_discovered_urls.add(current_url_to_discover)
+
+                    local_urls = self.get_all_href_tags()
+                    all_urls.update(local_urls)
+
+                    discoverable_urls = self.get_discoverable_links(local_urls)
+                    for local_url in discoverable_urls:
+                        if local_url not in has_discovered_urls:
+                            to_discover_urls.add(local_url)
+                except Exception as e:
+                    print(f"Error discovering {current_url_to_discover}: {e}")
+
+            current_depth += 1
+
+        return all_urls
+
 
 if __name__ == "__main__":
     scraper = Scraper()
 
-    urls = set([])
-
     try:
-        scraper.open_page("https://investor.apple.com/sec-filings/default.aspx")
-        print("Page loaded...")
-
-        hrefs = scraper.get_all_href_tags()
-        urls.update(*hrefs)
-
-        for link in scraper.get_discoverable_links(hrefs):
-            print(f"url count: {len(urls)}")
-            scraper.open_page(link)
-            temp = scraper.get_all_href_tags()
-            _temp = scraper.get_discoverable_links(temp)
-            urls.update(*_temp)
-
-        print("Logic finished...")
+        urls = scraper.run(
+            "https://www.google.com/search?q=apple+annual+report+2005", depth=1
+        )
+        print(urls)
     finally:
         scraper.close()
