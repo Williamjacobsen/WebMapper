@@ -174,13 +174,22 @@ class Scraper:
 
 if __name__ == "__main__":
     scraper = Scraper()
+
+    urls = set([])
+
     try:
         scraper.open_page("https://investor.apple.com/sec-filings/default.aspx")
         print("Page loaded...")
 
         hrefs = scraper.get_all_href_tags()
-        # print(hrefs)
-        print(scraper.get_file_links(hrefs))
+        urls.update(*hrefs)
+
+        for link in scraper.get_discoverable_links(hrefs):
+            print(f"url count: {len(urls)}")
+            scraper.open_page(link)
+            temp = scraper.get_all_href_tags()
+            _temp = scraper.get_discoverable_links(temp)
+            urls.update(*_temp)
 
         print("Logic finished...")
     finally:
